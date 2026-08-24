@@ -1,0 +1,26 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: platform-lipl-dev-app
+  namespace: argocd
+spec:
+  project: platform
+
+  source:
+    repoURL: https://github.com/kigawa-net/platform.git
+    targetRevision: main
+    path: lipl/dev
+    directory:
+      recurse: true
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: platform-lipl-dev
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: false
+    syncOptions:
+      - CreateNamespace=true
+      - ApplyOutOfSyncOnly=true
