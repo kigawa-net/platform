@@ -5,7 +5,7 @@ metadata:
 spec:
   ingressClassName: haproxy
   rules:
-    - host: stg-lipl.kigawa.net
+    - host: lipl.kigawa.net
       http:
         paths:
           - path: /

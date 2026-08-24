@@ -27,10 +27,11 @@ kigawa.net インフラの Kubernetes マニフェスト。ArgoCD による GitO
 
 | トリガー | 環境 | Namespace |
 |---------|------|-----------|
-| アプリ本体リポジトリで PR を作成・更新 | **dev**（PRごとに独立） | `platform-<service>-dev-pr-<PR番号>` |
+| アプリ本体リポジトリでPRに `deploy-preview` ラベルを付与 | **dev**（PRごとに独立） | `platform-<service>-dev-pr-<PR番号>` |
 | アプリ本体リポジトリの `main` へマージ | **stg** | `platform-<service>-stg` |
+| （必要なアプリのみ）手動実行（`workflow_dispatch`） | **main（本番相当）** | `platform-<service>-main` |
 
-dev環境はArgoCD ApplicationSetのPull Request GeneratorでPRごとにApplication/namespaceを動的生成する（`apps/<service>-dev-appset.yml`）。PRがクローズすれば対応するApplicationは自動削除される。stg環境は引き続き単一の共有環境で、実質的に各アプリの唯一の稼働環境になる（本番環境が別途必要になった場合のみ `main` 環境を追加する3環境構成に拡張する）。
+dev環境はArgoCD ApplicationSetのPull Request GeneratorでPRごとにApplication/namespaceを動的生成する（`apps/<service>-dev-appset.yml`）。PRがクローズすれば対応するApplicationは自動削除される。stgが既定の唯一の稼働環境で、本番相当の`main`環境が必要になったアプリのみ3環境構成に拡張する（例: `lipl`）。`main`環境はstgで検証済みのイメージをそのまま手動プロモートする方式（再ビルドしない）を取り、`workflow_dispatch`トリガーのワークフローが `<service>/stg/*.yaml` の現在のイメージタグを読み取って `<service>/main/*.yaml` へコピーする（例: `lipl` の `deploy-prod.yml`）。
 
 **アプリ本体リポジトリがpublicの場合**、誰でもフォークからPRを作成できるため、ラベルフィルタなしではPR Generatorが外部の任意のPRごとにnamespace/Deploymentを自動生成してしまう（クラスタリソース濫用のリスク）。`github.labels`（例: `deploy-preview`）でフィルタし、メンテナが明示的にラベルを付与したPRのみdev環境を生成する運用にする（該当ラベルはアプリ本体リポジトリ側に事前作成しておくこと。[Pull Request Generator](https://argo-cd.readthedocs.io/en/stable/operator-manual/applicationset/Generators-Pull-Request/)参照）。lipl の例は `apps/lipl-dev-appset.yml` を参照。
 

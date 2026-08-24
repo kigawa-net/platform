@@ -60,16 +60,18 @@ spec:
 
 ## デプロイトリガーの規則
 
-このリポジトリに置くアプリは、原則として以下の2環境構成で運用する（`main` という名前の本番専用環境は用意しない）。
+このリポジトリに置くアプリは、原則として以下の2環境構成で運用する（本番相当の `main` 環境は、実際に必要になったアプリのみ追加する）。
 
 | トリガー | 環境 | Namespace |
 |---------|------|-----------|
 | アプリ本体リポジトリでPRに `deploy-preview` ラベルを付与 | **dev**（PRごとに独立） | `platform-<service>-dev-pr-<PR番号>` |
 | アプリ本体リポジトリの `main` へマージ | **stg** | `platform-<service>-stg` |
+| （必要なアプリのみ）手動実行（`workflow_dispatch`） | **main（本番相当）** | `platform-<service>-main` |
 
 - **dev環境はPRごとに独立させる**: ArgoCD ApplicationSetのPull Request Generatorを使い、開いているPRごとに専用のApplication・namespaceを動的に生成する（例: `lipl` の場合 `apps/lipl-dev-appset.yml` 参照）。PRがクローズ/マージされると対応するApplicationは自動的に削除される（namespace自体の削除挙動はArgoCDバージョン依存、要検証）
 - **アプリ本体リポジトリがpublicの場合はラベルフィルタを必須にする**: 誰でもフォークからPRを作成できるため、`github.labels`（例: `deploy-preview`）でフィルタしないと外部の任意のPRごとにnamespace/Deploymentが自動生成されてしまう（クラスタリソース濫用のリスク）。フィルタに使うラベルはアプリ本体リポジトリ側に事前作成しておくこと
-- **stg環境が実質的に各アプリの唯一の稼働環境**（別途の本番環境が必要になった場合は `main` 環境を追加した3環境構成に拡張する。Namespace例: `platform-<service>-main`）
+- **stgが既定の唯一の稼働環境**。本番相当の`main`環境が必要になったアプリのみ3環境構成に拡張する（例: `lipl`。Namespace: `platform-<service>-main`）
+- **`main`環境（本番相当）はstgでビルド・検証済みのイメージをそのまま手動でプロモートする**（再ビルドしない）: アプリ本体リポジトリ側に `workflow_dispatch` トリガーのワークフローを用意し、`<service>/stg/*.yaml` に記載されている現在のイメージタグを読み取って `<service>/main/*.yaml` へそのままコピーし、`platform`リポジトリにコミットする。stgで動いているものと**同一のイメージ**が本番にデプロイされることを保証する（例: `lipl` の `deploy-prod.yml` 参照）
 - dev環境用のマニフェストはPRごとの動的パラメータ（namespace、imageタグ）を注入できるようKustomize構成にする（`lipl/dev/kustomization.yaml` 参照）。CIから `platform` リポジトリへのマニフェスト更新コミットは不要（ApplicationSetが直接namespace/imageタグを制御するため）
 
 ## 命名規則
