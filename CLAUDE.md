@@ -27,14 +27,14 @@ kigawa.net インフラの Kubernetes マニフェスト。ArgoCD による GitO
 
 | トリガー | 環境 | Namespace |
 |---------|------|-----------|
-| アプリ本体リポジトリで PR を作成・更新 | **dev** | `platform-<service>-dev` |
+| アプリ本体リポジトリで PR を作成・更新 | **dev**（PRごとに独立） | `platform-<service>-dev-pr-<PR番号>` |
 | アプリ本体リポジトリの `main` へマージ | **stg** | `platform-<service>-stg` |
 
-dev環境はPRごとに独立させず、単一の共有環境（最後にpushされたPRの内容で上書き）とする。stg環境が実質的に各アプリの唯一の稼働環境になる（本番環境が別途必要になった場合のみ `main` 環境を追加する3環境構成に拡張する）。
+dev環境はArgoCD ApplicationSetのPull Request GeneratorでPRごとにApplication/namespaceを動的生成する（`apps/<service>-dev-appset.yml`）。PRがクローズすれば対応するApplicationは自動削除される。stg環境は引き続き単一の共有環境で、実質的に各アプリの唯一の稼働環境になる（本番環境が別途必要になった場合のみ `main` 環境を追加する3環境構成に拡張する）。
 
 ## 命名規則
 
-- Namespace: `platform-<service>-dev` / `platform-<service>-stg`
+- Namespace: `platform-<service>-dev-pr-<PR番号>`（PRごと） / `platform-<service>-stg`
 - ArgoCD Application名: `platform-<service>-<env>-app`
 
 ## クラスタ共通設定（`kigawa-net-k8s` と同一クラスタのため共有）

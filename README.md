@@ -64,11 +64,12 @@ spec:
 
 | トリガー | 環境 | Namespace |
 |---------|------|-----------|
-| アプリ本体リポジトリで PR を作成・更新 | **dev** | `platform-<service>-dev` |
+| アプリ本体リポジトリで PR を作成・更新 | **dev**（PRごとに独立） | `platform-<service>-dev-pr-<PR番号>` |
 | アプリ本体リポジトリの `main` へマージ | **stg** | `platform-<service>-stg` |
 
-- **dev環境はPRごとに独立させない**（単一の共有dev環境に、最後にpushされたPRの内容を上書きデプロイする）
+- **dev環境はPRごとに独立させる**: ArgoCD ApplicationSetのPull Request Generatorを使い、開いているPRごとに専用のApplication・namespaceを動的に生成する（例: `lipl` の場合 `apps/lipl-dev-appset.yml` 参照）。PRがクローズ/マージされると対応するApplicationは自動的に削除される（namespace自体の削除挙動はArgoCDバージョン依存、要検証）
 - **stg環境が実質的に各アプリの唯一の稼働環境**（別途の本番環境が必要になった場合は `main` 環境を追加した3環境構成に拡張する。Namespace例: `platform-<service>-main`）
+- dev環境用のマニフェストはPRごとの動的パラメータ（namespace、imageタグ）を注入できるようKustomize構成にする（`lipl/dev/kustomization.yaml` 参照）。CIから `platform` リポジトリへのマニフェスト更新コミットは不要（ApplicationSetが直接namespace/imageタグを制御するため）
 
 ## 命名規則
 
