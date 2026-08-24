@@ -1,0 +1,55 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: platform-lipl-dev-appset
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+
+  generators:
+    - pullRequest:
+        github:
+          owner: kigawa-net
+          repo: lipl
+          # lipl は public リポジトリのため認証不要（tokenRef/appSecretName省略）。
+          # 誰でもフォークからPRを作成できるため、ラベルフィルタなしでは任意の
+          # 外部PRごとにnamespace/Deploymentが自動生成されてしまう（リソース濫用の
+          # リスク）。メンテナが明示的に付与したラベルを持つPRのみ対象にする。
+          labels:
+            - deploy-preview
+        requeueAfterSeconds: 60
+
+  template:
+    metadata:
+      name: "platform-lipl-dev-pr-{{.number}}"
+      namespace: argocd
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
+    spec:
+      project: platform
+      source:
+        repoURL: https://github.com/kigawa-net/platform.git
+        targetRevision: main
+        path: lipl/dev
+        kustomize:
+          namespace: "platform-lipl-dev-pr-{{.number}}"
+          images:
+            - "harbor.kigawa.net/private/lipl-api:develop-{{.head_sha}}"
+            - "harbor.kigawa.net/private/lipl-frontend:develop-{{.head_sha}}"
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: "platform-lipl-dev-pr-{{.number}}"
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - ApplyOutOfSyncOnly=true
+
+# PRがクローズ/マージされると、ApplicationSetのPR Generatorが対象PRを検出しなくなり、
+# 生成された Application が削除される。finalizer（resources-finalizer.argocd.argoproj.io）
+# により配下のリソース（Deployment/Service）はカスケード削除されるが、CreateNamespace=true で
+# 自動作成された namespace 自体がArgoCDのバージョンによって残存する場合がある（要検証。
+# 残存する場合は namespace 一覧を定期的に確認し、古いPR番号のnamespaceを別途削除する運用を検討）。

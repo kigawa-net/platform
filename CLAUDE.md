@@ -18,7 +18,7 @@ kigawa.net インフラの Kubernetes マニフェスト。ArgoCD による GitO
 ## 新しいアプリの追加
 
 1. `<service>/dev/` と `<service>/stg/` にマニフェストを配置（本番専用の `main` 環境は原則用意しない）
-2. `apps/<service>-dev-app.yml`, `apps/<service>-stg-app.yml` に ArgoCD Application を作成（`project: platform`、`namespace: platform-<service>-dev` / `platform-<service>-stg`）
+2. `apps/<service>-dev-appset.yml`（ArgoCD ApplicationSet、Pull Request Generator）と `apps/<service>-stg-app.yml`（ArgoCD Application）を作成（`project: platform`、`namespace: platform-<service>-dev-pr-<PR番号>` / `platform-<service>-stg`）
 3. コミット前に `kubectl apply --dry-run=client -f <manifest-file>` で検証する
 
 ## デプロイトリガーの規則（アプリ本体リポジトリ側のCI/CD）
@@ -27,14 +27,16 @@ kigawa.net インフラの Kubernetes マニフェスト。ArgoCD による GitO
 
 | トリガー | 環境 | Namespace |
 |---------|------|-----------|
-| アプリ本体リポジトリで PR を作成・更新 | **dev** | `platform-<service>-dev` |
+| アプリ本体リポジトリで PR を作成・更新 | **dev**（PRごとに独立） | `platform-<service>-dev-pr-<PR番号>` |
 | アプリ本体リポジトリの `main` へマージ | **stg** | `platform-<service>-stg` |
 
-dev環境はPRごとに独立させず、単一の共有環境（最後にpushされたPRの内容で上書き）とする。stg環境が実質的に各アプリの唯一の稼働環境になる（本番環境が別途必要になった場合のみ `main` 環境を追加する3環境構成に拡張する）。
+dev環境はArgoCD ApplicationSetのPull Request GeneratorでPRごとにApplication/namespaceを動的生成する（`apps/<service>-dev-appset.yml`）。PRがクローズすれば対応するApplicationは自動削除される。stg環境は引き続き単一の共有環境で、実質的に各アプリの唯一の稼働環境になる（本番環境が別途必要になった場合のみ `main` 環境を追加する3環境構成に拡張する）。
+
+**アプリ本体リポジトリがpublicの場合**、誰でもフォークからPRを作成できるため、ラベルフィルタなしではPR Generatorが外部の任意のPRごとにnamespace/Deploymentを自動生成してしまう（クラスタリソース濫用のリスク）。`github.labels`（例: `deploy-preview`）でフィルタし、メンテナが明示的にラベルを付与したPRのみdev環境を生成する運用にする（該当ラベルはアプリ本体リポジトリ側に事前作成しておくこと。[Pull Request Generator](https://argo-cd.readthedocs.io/en/stable/operator-manual/applicationset/Generators-Pull-Request/)参照）。lipl の例は `apps/lipl-dev-appset.yml` を参照。
 
 ## 命名規則
 
-- Namespace: `platform-<service>-dev` / `platform-<service>-stg`
+- Namespace: `platform-<service>-dev-pr-<PR番号>`（PRごと） / `platform-<service>-stg`
 - ArgoCD Application名: `platform-<service>-<env>-app`
 
 ## クラスタ共通設定（`kigawa-net-k8s` と同一クラスタのため共有）

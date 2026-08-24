@@ -64,11 +64,13 @@ spec:
 
 | トリガー | 環境 | Namespace |
 |---------|------|-----------|
-| アプリ本体リポジトリで PR を作成・更新 | **dev** | `platform-<service>-dev` |
+| アプリ本体リポジトリでPRに `deploy-preview` ラベルを付与 | **dev**（PRごとに独立） | `platform-<service>-dev-pr-<PR番号>` |
 | アプリ本体リポジトリの `main` へマージ | **stg** | `platform-<service>-stg` |
 
-- **dev環境はPRごとに独立させない**（単一の共有dev環境に、最後にpushされたPRの内容を上書きデプロイする）
+- **dev環境はPRごとに独立させる**: ArgoCD ApplicationSetのPull Request Generatorを使い、開いているPRごとに専用のApplication・namespaceを動的に生成する（例: `lipl` の場合 `apps/lipl-dev-appset.yml` 参照）。PRがクローズ/マージされると対応するApplicationは自動的に削除される（namespace自体の削除挙動はArgoCDバージョン依存、要検証）
+- **アプリ本体リポジトリがpublicの場合はラベルフィルタを必須にする**: 誰でもフォークからPRを作成できるため、`github.labels`（例: `deploy-preview`）でフィルタしないと外部の任意のPRごとにnamespace/Deploymentが自動生成されてしまう（クラスタリソース濫用のリスク）。フィルタに使うラベルはアプリ本体リポジトリ側に事前作成しておくこと
 - **stg環境が実質的に各アプリの唯一の稼働環境**（別途の本番環境が必要になった場合は `main` 環境を追加した3環境構成に拡張する。Namespace例: `platform-<service>-main`）
+- dev環境用のマニフェストはPRごとの動的パラメータ（namespace、imageタグ）を注入できるようKustomize構成にする（`lipl/dev/kustomization.yaml` 参照）。CIから `platform` リポジトリへのマニフェスト更新コミットは不要（ApplicationSetが直接namespace/imageタグを制御するため）
 
 ## 命名規則
 
@@ -79,6 +81,21 @@ spec:
 | ArgoCD Application名 | `platform-<service>-<env>-app` | `platform-lipl-stg-app` |
 
 `kigawa-net-k8s` 側の規約（Ingress Class `haproxy`、レジストリ `harbor.kigawa.net`、Secret管理 = Bitwarden Secrets Manager、DB = mariadb-operator、ストレージクラス `rook-cephfs`/`rook-ceph-rbd`）は同一クラスタ上の設定のため、このリポジトリでも同じものを使う。詳細は `kigawa-net-k8s` のREADME・CLAUDE.mdを参照。
+
+## デプロイ済みアプリ
+
+| アプリ | ソースリポジトリ | dev | stg |
+|--------|-----------------|-----|-----|
+| Lipl | [kigawa-net/lipl](https://github.com/kigawa-net/lipl) | `lipl/dev/`（`platform-lipl-dev`、`lipl-dev.kigawa.net`） | `lipl/stg/`（`platform-lipl-stg`、`lipl.kigawa.net`） |
+
+Liplの詳細な設計は [kigawa-net/lipl の docs/infrastructure.md](https://github.com/kigawa-net/lipl/blob/main/docs/infrastructure.md) を参照。CIから`develop-<sha>`/`main-<sha>`タグでイメージをpush後、`lipl/dev/`・`lipl/stg/`配下のDeployment manifestのimageタグを更新してこのリポジトリへコミットする運用（詳細は `lipl` リポジトリの `.github/workflows/`）。
+
+### 前提として未整備の項目（デプロイ実行前に対応が必要）
+
+- `harbor-registry`（イメージpull用Secret）が `platform-lipl-dev` / `platform-lipl-stg` namespaceに未作成
+- `bitwarden-sec`（Bitwarden同期用トークン）を `kigawa-system/secret-provider/bitwarden-sync-crn.yaml` の `TARGET_NAMESPACES` に追加していない
+- `apps/lipl-dev-app.yml` / `apps/lipl-stg-app.yml` はまだArgoCDに登録されていない（`kubectl apply` が必要。上記「新しいアプリの追加方法」参照）
+- `lipl-dev.kigawa.net` / `lipl.kigawa.net` のDNS解決（`*.kigawa.net` ワイルドカードの実在確認）が未確認
 
 ## セットアップ（初回のみ・手動）
 
