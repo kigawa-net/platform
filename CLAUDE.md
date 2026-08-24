@@ -5,7 +5,7 @@
 
 ## Repository Overview
 
-kigawa.net インフラの Kubernetes マニフェスト。ArgoCD による GitOps 管理。`main` へのマージが自動デプロイをトリガーする。
+kigawa.net インフラの Kubernetes マニフェスト。ArgoCD による GitOps 管理。**このリポジトリ自身**の `main` へのマージが（ArgoCDの同期対象としての）自動デプロイをトリガーする。各アプリの実際の環境（dev/stg）を何がデプロイするかは、アプリ本体リポジトリ側のCI/CDがこのリポジトリの `<service>/dev/` または `<service>/stg/` を更新することで決まる（下記「デプロイトリガーの規則」参照）。
 
 `kigawa-net-k8s`（既存の別リポジトリ）と同一クラスタを対象とするが、AppProject・Namespaceプレフィックスは独立している（`platform` / `platform-*`）。既存アプリ（keruta, lp 等）は引き続き `kigawa-net-k8s` 側で稼働中で、このリポジトリには含まれない。
 
@@ -17,13 +17,24 @@ kigawa.net インフラの Kubernetes マニフェスト。ArgoCD による GitO
 
 ## 新しいアプリの追加
 
-1. `<service>/main/`（または `<service>/<env>/`）にマニフェストを配置
-2. `apps/<service>-<env>-app.yml` に ArgoCD Application を作成（`project: platform`、`namespace: platform-<service>-<env>`）
+1. `<service>/dev/` と `<service>/stg/` にマニフェストを配置（本番専用の `main` 環境は原則用意しない）
+2. `apps/<service>-dev-app.yml`, `apps/<service>-stg-app.yml` に ArgoCD Application を作成（`project: platform`、`namespace: platform-<service>-dev` / `platform-<service>-stg`）
 3. コミット前に `kubectl apply --dry-run=client -f <manifest-file>` で検証する
+
+## デプロイトリガーの規則（アプリ本体リポジトリ側のCI/CD）
+
+このリポジトリ自体の `main` ブランチ（後述、GitOpsのトリガー）とは別に、各アプリの**本体リポジトリ**（例: `lipl`）側でのCI/CDは以下の規則に従う:
+
+| トリガー | 環境 | Namespace |
+|---------|------|-----------|
+| アプリ本体リポジトリで PR を作成・更新 | **dev** | `platform-<service>-dev` |
+| アプリ本体リポジトリの `main` へマージ | **stg** | `platform-<service>-stg` |
+
+dev環境はPRごとに独立させず、単一の共有環境（最後にpushされたPRの内容で上書き）とする。stg環境が実質的に各アプリの唯一の稼働環境になる（本番環境が別途必要になった場合のみ `main` 環境を追加する3環境構成に拡張する）。
 
 ## 命名規則
 
-- Namespace: `platform-<service>-main` / `platform-<service>-dev`
+- Namespace: `platform-<service>-dev` / `platform-<service>-stg`
 - ArgoCD Application名: `platform-<service>-<env>-app`
 
 ## クラスタ共通設定（`kigawa-net-k8s` と同一クラスタのため共有）

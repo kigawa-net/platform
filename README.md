@@ -58,13 +58,25 @@ spec:
 
 3. `apps/apps-app.yml` が `apps/` を再帰的に読むため、追加ファイルだけで自動認識される
 
+## デプロイトリガーの規則
+
+このリポジトリに置くアプリは、原則として以下の2環境構成で運用する（`main` という名前の本番専用環境は用意しない）。
+
+| トリガー | 環境 | Namespace |
+|---------|------|-----------|
+| アプリ本体リポジトリで PR を作成・更新 | **dev** | `platform-<service>-dev` |
+| アプリ本体リポジトリの `main` へマージ | **stg** | `platform-<service>-stg` |
+
+- **dev環境はPRごとに独立させない**（単一の共有dev環境に、最後にpushされたPRの内容を上書きデプロイする）
+- **stg環境が実質的に各アプリの唯一の稼働環境**（別途の本番環境が必要になった場合は `main` 環境を追加した3環境構成に拡張する。Namespace例: `platform-<service>-main`）
+
 ## 命名規則
 
 | 種別 | パターン | 例 |
 |------|---------|-----|
-| Namespace（本番） | `platform-<service>-main` | `platform-lipl-main` |
-| Namespace（開発） | `platform-<service>-dev` | `platform-lipl-dev` |
-| ArgoCD Application名 | `platform-<service>-<env>-app` | `platform-lipl-main-app` |
+| Namespace（stg） | `platform-<service>-stg` | `platform-lipl-stg` |
+| Namespace（dev） | `platform-<service>-dev` | `platform-lipl-dev` |
+| ArgoCD Application名 | `platform-<service>-<env>-app` | `platform-lipl-stg-app` |
 
 `kigawa-net-k8s` 側の規約（Ingress Class `haproxy`、レジストリ `harbor.kigawa.net`、Secret管理 = Bitwarden Secrets Manager、DB = mariadb-operator、ストレージクラス `rook-cephfs`/`rook-ceph-rbd`）は同一クラスタ上の設定のため、このリポジトリでも同じものを使う。詳細は `kigawa-net-k8s` のREADME・CLAUDE.mdを参照。
 
