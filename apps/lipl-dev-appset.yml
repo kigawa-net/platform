@@ -12,7 +12,12 @@ spec:
         github:
           owner: kigawa-net
           repo: lipl
-          # lipl は public リポジトリのため認証不要（tokenRef/appSecretName省略）
+          # lipl は public リポジトリのため認証不要（tokenRef/appSecretName省略）。
+          # 誰でもフォークからPRを作成できるため、ラベルフィルタなしでは任意の
+          # 外部PRごとにnamespace/Deploymentが自動生成されてしまう（リソース濫用の
+          # リスク）。メンテナが明示的に付与したラベルを持つPRのみ対象にする。
+          labels:
+            - deploy-preview
         requeueAfterSeconds: 60
 
   template:
