@@ -1,0 +1,78 @@
+apiVersion: k8s.bitwarden.com/v1
+kind: BitwardenSecret
+metadata:
+  name: mariadb-lipl-main
+spec:
+  organizationId: "a2b57f3d-6e2b-4467-b499-b31e00bfd804"
+  secretName: mariadb-lipl-main
+  authToken:
+    secretName: bitwarden-sec
+    secretKey: token
+  map:
+    - bwSecretId: "e52186f2-3be0-4364-b851-b4b100563d5e"
+      secretKeyName: root-pass
+    - bwSecretId: "f6127f1d-ee9f-4c04-9043-b4b100563c19"
+      secretKeyName: pass
+---
+apiVersion: k8s.mariadb.com/v1alpha1
+kind: MariaDB
+metadata:
+  name: mariadb-lipl-main
+spec:
+  image: mariadb:10.11
+  port: 3306
+  rootPasswordSecretKeyRef:
+    name: mariadb-lipl-main
+    key: root-pass
+  storage:
+    size: 1Gi
+    storageClassName: rook-ceph-rbd
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  startupProbe:
+    initialDelaySeconds: 20
+    periodSeconds: 10
+    failureThreshold: 60
+  updateStrategy:
+    autoUpdateDataPlane: true
+---
+apiVersion: k8s.mariadb.com/v1alpha1
+kind: Database
+metadata:
+  name: lipl
+spec:
+  mariaDbRef:
+    name: mariadb-lipl-main
+  name: lipl
+  characterSet: utf8mb4
+  collate: utf8mb4_unicode_ci
+---
+apiVersion: k8s.mariadb.com/v1alpha1
+kind: User
+metadata:
+  name: lipl
+spec:
+  mariaDbRef:
+    name: mariadb-lipl-main
+  passwordSecretKeyRef:
+    name: mariadb-lipl-main
+    key: pass
+  maxUserConnections: 20
+---
+apiVersion: k8s.mariadb.com/v1alpha1
+kind: Grant
+metadata:
+  name: lipl
+spec:
+  mariaDbRef:
+    name: mariadb-lipl-main
+  username: lipl
+  database: lipl
+  table: "*"
+  privileges:
+    - ALL PRIVILEGES

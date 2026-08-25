@@ -24,6 +24,22 @@ spec:
           ports:
             - containerPort: 8080
               protocol: TCP
+          env:
+            - name: DB_HOST
+              value: mariadb-lipl-stg
+            - name: DB_PORT
+              value: "3306"
+            - name: DB_NAME
+              value: lipl
+            - name: DB_USER
+              value: lipl
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mariadb-lipl-stg
+                  key: pass
+            - name: KEYCLOAK_ISSUER
+              value: https://user.kigawa.net/realms/lipl
           startupProbe:
             httpGet:
               path: /health
