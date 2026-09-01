@@ -5,6 +5,7 @@ resources:
   - lipl-api.yaml
   - lipl-frontend.yaml
   - mariadb.yaml
+  - kaft.yaml
 
 # namespace・imageタグはPRごとにArgoCD ApplicationSetが動的に上書きする
 # （apps/lipl-dev-appset.yml参照）。ベース内には固定値を持たせない。
