@@ -40,6 +40,16 @@ spec:
                   key: pass
             - name: KEYCLOAK_ISSUER
               value: https://user.kigawa.net/realms/lipl
+            # lipl-devはPR毎の一時環境のため、共有・安定環境であるkaft-stgに接続する（kaft.yaml参照）。
+            - name: KAFT_BASE_URL
+              value: http://kaft.kaft-stg.svc.cluster.local:8080
+            - name: KAFT_PUBLIC_BASE_URL
+              value: https://kaft-stg.kigawa.net
+            - name: KAFT_INTERNAL_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: kaft-stg
+                  key: internal-jwt-secret
           startupProbe:
             httpGet:
               path: /health
