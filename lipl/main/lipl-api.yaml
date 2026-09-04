@@ -49,6 +49,11 @@ spec:
                 secretKeyRef:
                   name: kaft-main
                   key: internal-jwt-secret
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: anthropic-main
+                  key: api-key
           startupProbe:
             httpGet:
               path: /health
