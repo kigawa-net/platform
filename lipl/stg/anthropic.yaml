@@ -1,0 +1,13 @@
+apiVersion: k8s.bitwarden.com/v1
+kind: BitwardenSecret
+metadata:
+  name: anthropic-stg
+spec:
+  organizationId: "a2b57f3d-6e2b-4467-b499-b31e00bfd804"
+  secretName: anthropic-stg
+  authToken:
+    secretName: bitwarden-sec
+    secretKey: token
+  map:
+    - bwSecretId: "9f40ef16-2a0a-40f1-a1f3-b456006027fe"
+      secretKeyName: api-key
