@@ -1,0 +1,13 @@
+apiVersion: k8s.bitwarden.com/v1
+kind: BitwardenSecret
+metadata:
+  name: lipl-api-service-keycloak
+spec:
+  organizationId: "a2b57f3d-6e2b-4467-b499-b31e00bfd804"
+  secretName: lipl-api-service-keycloak
+  authToken:
+    secretName: bitwarden-sec
+    secretKey: token
+  map:
+    - bwSecretId: "2f589f82-b4f8-43a1-b1ea-b4bb0072e295"
+      secretKeyName: client-secret
