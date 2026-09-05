@@ -49,11 +49,19 @@ spec:
                 secretKeyRef:
                   name: kaft-stg
                   key: internal-jwt-secret
-            - name: ANTHROPIC_API_KEY
+            - name: ANTHROPIC_KEYCLOAK_CLIENT_ID
+              value: lipl-api-service
+            - name: ANTHROPIC_KEYCLOAK_CLIENT_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: anthropic-stg
-                  key: api-key
+                  name: lipl-api-service-keycloak
+                  key: client-secret
+            - name: ANTHROPIC_FEDERATION_RULE_ID
+              value: fdrl_01BfKKM3JkCkzHsP7mNNAhYm
+            - name: ANTHROPIC_ORGANIZATION_ID
+              value: e1c1d300-e0a4-440c-badb-98548fdf42dc
+            - name: ANTHROPIC_SERVICE_ACCOUNT_ID
+              value: svac_01S4bFpcpBZkg2fLR9M7QTEq
           startupProbe:
             httpGet:
               path: /health
