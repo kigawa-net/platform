@@ -62,6 +62,9 @@ spec:
               value: e1c1d300-e0a4-440c-badb-98548fdf42dc
             - name: ANTHROPIC_SERVICE_ACCOUNT_ID
               value: svac_01S4bFpcpBZkg2fLR9M7QTEq
+            # stg限定のデバッグメニュー（AI生成回数編集）。main/devには設定しない。
+            - name: DEBUG_MENU_ENABLED
+              value: "true"
           startupProbe:
             httpGet:
               path: /health
