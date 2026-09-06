@@ -1,0 +1,13 @@
+apiVersion: k8s.bitwarden.com/v1
+kind: BitwardenSecret
+metadata:
+  name: lipl-session-encryption-key
+spec:
+  organizationId: "a2b57f3d-6e2b-4467-b499-b31e00bfd804"
+  secretName: lipl-session-encryption-key
+  authToken:
+    secretName: bitwarden-sec
+    secretKey: token
+  map:
+    - bwSecretId: "b035eac2-2d2c-49dd-8685-b4bd0118dd79"
+      secretKeyName: value
