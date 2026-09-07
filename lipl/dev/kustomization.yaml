@@ -6,6 +6,8 @@ resources:
   - lipl-frontend.yaml
   - mariadb.yaml
   - kaft.yaml
+  - lipl-backend-keycloak.yaml
+  - lipl-session-encryption-key.yaml
 
 # namespace・imageタグはPRごとにArgoCD ApplicationSetが動的に上書きする
 # （apps/lipl-dev-appset.yml参照）。ベース内には固定値を持たせない。
