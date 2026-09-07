@@ -19,7 +19,7 @@ spec:
         - name: harbor-registry
       containers:
         - name: lipl-api
-          image: harbor.kigawa.net/private/lipl-api:main-cfb17b94f8a532de3d44b1a0da6eea0562e95c55
+          image: harbor.kigawa.net/private/lipl-api:main-faddb3db4d9770a0cb300c0e086316bec679b69a
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
