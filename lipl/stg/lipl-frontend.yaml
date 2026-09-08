@@ -19,7 +19,7 @@ spec:
         - name: harbor-registry
       containers:
         - name: lipl-frontend
-          image: harbor.kigawa.net/private/lipl-frontend:main-7dae5f0efae3d282320be4cfdc0034e5607fb0b6
+          image: harbor.kigawa.net/private/lipl-frontend:main-dcca852210bd206469c617c43c018ee216ce0983
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 3000
