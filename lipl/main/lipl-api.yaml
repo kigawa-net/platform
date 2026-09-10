@@ -5,7 +5,7 @@ metadata:
   labels:
     app: lipl-api
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       app: lipl-api
@@ -17,6 +17,17 @@ spec:
     spec:
       imagePullSecrets:
         - name: harbor-registry
+      # レプリカが同一ノードに集中して単一ノード障害でも全滅しないよう、
+      # 別ノードに分散させることを優先する（必須にはしない＝空きがなければ同居も許容）。
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: lipl-api
+                topologyKey: kubernetes.io/hostname
       containers:
         - name: lipl-api
           image: harbor.kigawa.net/private/lipl-api:main-8725ea27147a681fedced196894e65b9b29cacc1
