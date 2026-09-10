@@ -49,6 +49,10 @@ spec:
                 secretKeyRef:
                   name: mariadb-lipl-main
                   key: pass
+            # replicas:2（ロールアウト中は最大3）× このプールサイズが、DBユーザーの
+            # max_user_connections（20）を超えないようにする。3×6=18。
+            - name: DB_POOL_SIZE
+              value: "6"
             - name: KEYCLOAK_ISSUER
               value: https://user.kigawa.net/realms/lipl
             - name: KAFT_BASE_URL
