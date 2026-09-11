@@ -30,7 +30,7 @@ spec:
                 topologyKey: kubernetes.io/hostname
       containers:
         - name: lipl-api
-          image: harbor.kigawa.net/private/lipl-api:main-16d0be40d44b6e7190b031ca44c33f32db3563ae
+          image: harbor.kigawa.net/private/lipl-api:main-f279c9b366ee4acbf5cf7ad8165895a808e6c1db
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
