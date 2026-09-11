@@ -30,7 +30,7 @@ spec:
                 topologyKey: kubernetes.io/hostname
       containers:
         - name: lipl-frontend
-          image: harbor.kigawa.net/private/lipl-frontend:main-f279c9b366ee4acbf5cf7ad8165895a808e6c1db
+          image: harbor.kigawa.net/private/lipl-frontend:main-12b982a88102f67a07bbffb0568a78e761460199
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 3000
