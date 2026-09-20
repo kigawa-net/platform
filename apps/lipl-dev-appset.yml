@@ -12,7 +12,13 @@ spec:
         github:
           owner: kigawa-net
           repo: lipl
-          # lipl は public リポジトリのため認証不要（tokenRef/appSecretName省略）。
+          # 2026-09: 「publicリポジトリだから認証不要」という前提は誤りだった。
+          # 未認証のGitHub APIアクセスは60回/時間/IPしかなく、requeueAfterSeconds:60
+          # で継続ポーリングすると同一クラスタ egress IP を共有する他のPR generator
+          # (kaft-dev-appset等)と合わせてすぐ枯渇し、ApplicationSetがDegraded化して
+          # いた。GitHub App認証(appSecretName)を追加し、5000回/時間の認証済み
+          # レート制限を使う。
+          appSecretName: lipl-pr-github-app
           # 誰でもフォークからPRを作成できるため、ラベルフィルタなしでは任意の
           # 外部PRごとにnamespace/Deploymentが自動生成されてしまう（リソース濫用の
           # リスク）。メンテナが明示的に付与したラベルを持つPRのみ対象にする。
