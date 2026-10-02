@@ -1,0 +1,128 @@
+# exkes / stg: exkes-api Deployment
+#
+# 更新者:
+#   - image タグ: **自動**。kigawa-net/exkes の
+#     .github/workflows/deploy-stg.yml が `main` push ごとに
+#       yq -i '(select(.kind == "Deployment") | .spec.template.spec.containers[0].image) = strenv(image)'
+#     で書き換えて kigawa-net/platform の main へ commit する。
+#     ファイル名はモジュール名そのもの（exkes-api.yaml）に固定されている。
+#     MODULES = "exkes-api exkes-controller" の 2 つだけが対象。
+#   - それ以外（env / probe / resources 等）: **手動 PR**。
+#     CI はこのファイルの image しか触らない（意図しないファイル混入チェックあり）。
+#
+# CI との前提（壊すと deploy が落ちる）:
+#   1. このファイルは **Deployment 1 リソースだけ**であること。
+#      CI は `yq -r '.kind'` が "Deployment" 以外、または複数行になると hard fail する。
+#      Service は必ず exkes-api-svc.yaml へ分離すること。
+#   2. `containers[0]` が exkes-api であること（CI は index 固定で image を書く）。
+#      sidecar を containers[0] より前に足さない。
+#   3. image は `harbor.kigawa.net/private/exkes-api:main-<40 hex>` 形式。
+#      deploy-prod.yml が昇格時にこの正規表現で検証する。
+#
+# 前提条件:
+#   - harbor-registry（imagePullSecrets）が ns 内に存在すること（実装計画 11.3章）。
+#   - mariadb-exkes-stg / BitwardenSecret 経由で mariadb-exkes-stg Secret が
+#     同期されていること（exkes/stg/mariadb.yaml 参照）。
+#     BitwardenSecret が失敗すると DB password Secret が作られず、
+#     この Pod は SecretNotFound で起動できない。
+#
+# namespace は書かない（apps/exkes-stg-app.yml の destination.namespace が適用する）。
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: exkes-api
+  labels:
+    app: exkes-api
+    app.kubernetes.io/part-of: exkes
+    app.kubernetes.io/component: api
+spec:
+  # issue #2 / 実装計画 9.4章: replicas は stg / main ともに 1。
+  # exkes-api はステートレスだが、第1MS で水平スケールする要件は無く、
+  # 増やす判断はまだしない（main でも 2 にしない）。
+  replicas: 1
+  selector:
+    matchLabels:
+      app: exkes-api
+  template:
+    metadata:
+      name: exkes-api
+      labels:
+        app: exkes-api
+        app.kubernetes.io/part-of: exkes
+        app.kubernetes.io/component: api
+    spec:
+      # issue #2「Controller RBAC」: exkes-api に Kubernetes 権限を与えない。
+      # 2 重で塞ぐ。
+      #   1) serviceAccountName を指定しない（= namespace の default SA）
+      #   2) automountServiceAccountToken: false でトークンをマウントしない
+      # exkes-api は client-java に依存しておらず（実装計画 11.1章）、
+      # K8s API を呼ぶコードパス自体が無いので、default SA が持つ
+      # 「非リソース URL への GET（discovery）のみ」という権限も行使されない。
+      automountServiceAccountToken: false
+      imagePullSecrets:
+        - name: harbor-registry
+      containers:
+        - name: exkes-api
+          # ↓ CI（deploy-stg.yml / deploy-prod.yml）が yq で書き換える。
+          # 初期値はプレースホルダ（全 0 の 40 hex）。harbor には存在しないので、
+          # ImagePullBackOff になるのが正しい状態。最初の main push で
+          # 実 SHA に置き換わる。
+          image: harbor.kigawa.net/private/exkes-api:main-0000000000000000000000000000000000000000
+          # 本番相当なので tag 固定 = Always は使わない（platform/CLAUDE.md の規約）。
+          # 昇格時は stg と同一 tag / 同一 digest になる。
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+          env:
+            # 値は exkes-api/src/main/resources/application.conf の
+            # exkes.database section と 1対1。conf 側に対応する
+            # `${?EXKES_...}` オーバーライドが無いと起動時に落ちる。
+            - name: EXKES_DATABASE_JDBC_URL
+              value: jdbc:mariadb://mariadb-exkes-stg:3306/exkes
+            - name: EXKES_DATABASE_USER
+              value: exkes
+            - name: EXKES_DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mariadb-exkes-stg
+                  key: pass
+            # workspaces.storage_class の既定値。API は Workspace 作成時に
+            # この値を DB 行へ書き込むだけ（実際の PVC 作成は controller）。
+            - name: EXKES_WORKSPACE_STORAGECLASS
+              value: rook-cephfs
+          # probe は GET /health（exkes-api/routes/HealthRoutes.kt は 200 を返す）。
+          # startupProbe で Flyway の migrate 完了を待ち、
+          # その後 liveness / readiness を出す（lipl と同じ 3 段構成）。
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+      restartPolicy: Always

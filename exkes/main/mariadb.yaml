@@ -1,0 +1,130 @@
+# exkes / main: MariaDB（BitwardenSecret + MariaDB + Database + User + Grant）
+#
+# 更新者: 手動（PR のみ）。CI はこのファイルを触らない。
+#
+# 5 リソースを 1 ファイルにまとめるのは lipl/stg/mariadb.yaml と同型。
+# 「1 リソース 1 ファイル」（issue #2 の platform 側構成）は Deployment と
+# Service を分けるための制約で、DB の 5 セットを割ると片方だけ入る事故が
+# 起きる。platform リポジトリの実例（lipl）に合わせている。
+#
+# namespace は書かない（apps/exkes-main-app.yml の destination.namespace が適用）。
+#
+# 前提条件（これらが揃わないと MariaDB が起動しない）:
+#   1. **bwSecretId の実 UUID 置換**（最重要）
+#      下の <TODO-BWS-UUID-...> は**プレースホルダ**。Bitwarden に
+#      mariadb-exkes-main の root-pass / pass を登録し、得た UUID を
+#      ここに書く PR を main に入れること（実装計画 12章#2）。
+#      プレースホルダのまま Argo CD を同期すると BitwardenSecret が
+#      同期失敗し、Secret mariadb-exkes-main が作られない。exkes-api /
+#      exkes-controller は secretKeyRef を解決できず SecretNotFound で
+#      CrashLoop する。
+#   2. namespace 内に Secret `bitwarden-sec`（authToken 用）が存在すること。
+#      kigawa-net-k8s 側の kigawa-system/secret-provider/bitwarden-sync-crn.yaml
+#      の TARGET_NAMESPACES に platform-exkes-main の追記が必要
+#      （実装計画 11.3章 / 12章#3）。**別リポジトリの作業なので先行 PR が必要**。
+#   3. `organizationId` は kigawa.net の組織 ID で固定値（lipl と同一）。
+#
+# image について:
+#   mariadb:11 を使う。実装計画 9.3章の指定、かつ exkes/docker-compose.yml の
+#   ローカル開発と揃えるため（統一を取ると stg/main でスキーマ差が出にくい）。
+#   なお platform の lipl は mariadb:10.11 なので**この repo 内では版が
+#   揃っていない**。将来的に揃えるかは別判断とする。
+#
+# storage: rook-ceph-rbd（platform/CLAUDE.md の規約。ブロックデバイス）。
+#   Workspace（利用者ファイル）は Rook-CephFS だが、DB が持つのは
+#   workspace のメタデータだけ。ファイル実体は CephFS、DB 行は RBD。混在させない。
+#
+# issue #2「MariaDB」:
+#   環境ごとに専用 MariaDB を作る（platform/CLAUDE.md の規約:
+#   アプリ専用の MariaDB を mariadb-operator で構築し、共有インスタンスは使わない）。
+#   main のインスタンス名: mariadb-exkes-main（stg は mariadb-exkes-stg）
+#   database: exkes / user: exkes
+#
+# ① BitwardenSecret（②〜⑤ が参照する Secret の実体）
+apiVersion: k8s.bitwarden.com/v1
+kind: BitwardenSecret
+metadata:
+  name: mariadb-exkes-main
+spec:
+  organizationId: "a2b57f3d-6e2b-4467-b499-b31e00bfd804"
+  secretName: mariadb-exkes-main
+  authToken:
+    secretName: bitwarden-sec
+    secretKey: token
+  map:
+    # ⚠ プレースホルダ。デプロイ前に実 UUID へ置換すること（上記 前提条件 1）。
+    - bwSecretId: "<TODO-BWS-UUID-root-pass>"
+      secretKeyName: root-pass
+    # ⚠ プレースホルダ。デプロイ前に実 UUID へ置換すること（上記 前提条件 1）。
+    - bwSecretId: "<TODO-BWS-UUID-pass>"
+      secretKeyName: pass
+---
+# ② MariaDB 本体（環境ごと専用。共有インスタンスは使わない）
+apiVersion: k8s.mariadb.com/v1alpha1
+kind: MariaDB
+metadata:
+  name: mariadb-exkes-main
+spec:
+  image: mariadb:11
+  port: 3306
+  rootPasswordSecretKeyRef:
+    name: mariadb-exkes-main
+    key: root-pass
+  storage:
+    size: 1Gi
+    storageClassName: rook-ceph-rbd
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  # mariadb-operator が root-pass Secret を読み取れるまで initdb が完了しないため、
+  # 開始を遅らせて初期化を待つ（lipl と同値）。
+  startupProbe:
+    initialDelaySeconds: 20
+    periodSeconds: 10
+    failureThreshold: 60
+  # image 変更時に StatefulSet を更新する（lipl と同値）。
+  updateStrategy:
+    autoUpdateDataPlane: true
+---
+# ③ Database
+apiVersion: k8s.mariadb.com/v1alpha1
+kind: Database
+metadata:
+  name: exkes
+spec:
+  mariaDbRef:
+    name: mariadb-exkes-main
+  name: exkes
+  characterSet: utf8mb4
+  collate: utf8mb4_unicode_ci
+---
+# ④ User
+apiVersion: k8s.mariadb.com/v1alpha1
+kind: User
+metadata:
+  name: exkes
+spec:
+  mariaDbRef:
+    name: mariadb-exkes-main
+  passwordSecretKeyRef:
+    name: mariadb-exkes-main
+    key: pass
+  maxUserConnections: 20
+---
+# ⑤ Grant（④の User に ③の Database への ALL PRIVILEGES を与える）
+apiVersion: k8s.mariadb.com/v1alpha1
+kind: Grant
+metadata:
+  name: exkes
+spec:
+  mariaDbRef:
+    name: mariadb-exkes-main
+  username: exkes
+  database: exkes
+  table: "*"
+  privileges:
+    - ALL PRIVILEGES

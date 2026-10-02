@@ -1,0 +1,135 @@
+# exkes / stg: exkes-controller Deployment
+#
+# 更新者:
+#   - image タグ: **自動**。kigawa-net/exkes の
+#     .github/workflows/deploy-stg.yml が `main` push ごとに
+#       yq -i '(select(.kind == "Deployment") | .spec.template.spec.containers[0].image) = strenv(image)'
+#     で書き換えて kigawa-net/platform の main へ commit する。
+#     MODULES = "exkes-api exkes-controller" の 2 つだけが対象。
+#   - それ以外（env / probe / resources / replicas 等）: **手動 PR**。
+#
+# CI との前提（壊すと deploy が落ちる）:
+#   1. このファイルは **Deployment 1 リソースだけ**であること
+#      （CI は `yq -r '.kind'` が "Deployment" 以外 / 複数行で hard fail）。
+#      Service は exkes-controller-svc.yaml へ分離すること。
+#   2. `containers[0]` が exkes-controller であること。
+#   3. image は `harbor.kigawa.net/private/exkes-controller:main-<40 hex>` 形式。
+#
+# 前提条件:
+#   - harbor-registry（imagePullSecrets）が ns 内に存在すること（実装計画 11.3章）。
+#   - exkes/stg/rbac.yaml の ServiceAccount `exkes-controller` が適用済み。
+#     無い / 壊れていると in-cluster Config 生成は成功しても API 呼び出しが 403 になる。
+#     影響は provisioning 失敗（workspace が ERROR になる）だけで、
+#     プロセス自体は落ちない（実装計画 7.2章）。
+#   - mariadb-exkes-stg Secret が BitwardenSecret 経由で同期済みであること。
+#
+# namespace は書かない（apps/exkes-stg-app.yml の destination.namespace が適用する）。
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: exkes-controller
+  labels:
+    app: exkes-controller
+    app.kubernetes.io/part-of: exkes
+    app.kubernetes.io/component: controller
+spec:
+  # replicas: 1 固定。実装計画 7.2章 / 12章#6:
+  #   WorkspaceReconciler の試行回数（maxAttempts）と作成中タイムアウトの予算を
+  #   プロセス内メモリで持っているため、replicas を増やすと同じ workspace を
+  #   複数 Pod が同時に provision / delete しうる（＝二重作成）。
+  #   第2MS で Lease によるリーダー選出を入れてから増やす。それまでは 1。
+  #   exkes-api と違い main でも 2 にしない（issue #2 に水平スケールの要件が無い）。
+  replicas: 1
+  selector:
+    matchLabels:
+      app: exkes-controller
+  template:
+    metadata:
+      name: exkes-controller
+      labels:
+        app: exkes-controller
+        app.kubernetes.io/part-of: exkes
+        app.kubernetes.io/component: controller
+    spec:
+      # issue #2「Controller RBAC」: K8s 権限を持つのは controller だけ。
+      # この SA に persistentvolumeclaims の限定権限だけを渡す（rbac.yaml）。
+      # exkes-api には SA を作らない / token も作らない。
+      serviceAccountName: exkes-controller
+      # SA トークンは Workspace PVC の作成・削除に必要なのでマウントする。
+      # （default SA ではなく rbac.yaml の exkes-controller を明示している）
+      automountServiceAccountToken: true
+      imagePullSecrets:
+        - name: harbor-registry
+      containers:
+        - name: exkes-controller
+          # ↓ CI（deploy-stg.yml / deploy-prod.yml）が yq で書き換える。
+          # 初期値はプレースホルダ（全 0 の 40 hex）。最初の main push で実 SHA に
+          # 置き換わる。stg の exkes-api とは**別モジュール**なので SHA も別になる。
+          image: harbor.kigawa.net/private/exkes-controller:main-0000000000000000000000000000000000000000
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+          env:
+            # exkes-controller/src/main/resources/application.conf の
+            # exkes.database section と 1対1。
+            - name: EXKES_DATABASE_JDBC_URL
+              value: jdbc:mariadb://mariadb-exkes-stg:3306/exkes
+            - name: EXKES_DATABASE_USER
+              value: exkes
+            - name: EXKES_DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mariadb-exkes-stg
+                  key: pass
+            # exkes.kubernetes section。controller が PVC を作る namespace。
+            # 第1MS では Sandbox Namespace を跨いだ操作を行わない
+            # （Runtime Pod を Sandbox に置くのは第2MS。実装計画 9.4章）。
+            # ここでは「自分がいる namespace」= platform-exkes-stg をそのまま使う。
+            - name: EXKES_KUBERNETES_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: EXKES_KUBERNETES_USE_IN_CLUSTER
+              value: "true"
+            # exkes.workspace section。PVC は controller が実行時に動的作成する
+            # ので、静的 PV/PVC マニフェストは持たない（実装計画 9.7章）。
+            - name: EXKES_WORKSPACE_STORAGECLASS
+              value: rook-cephfs
+              # exkes.reconciler section。conf の既定値で妥当なのでここでは
+              # 上書きしない（EXKES_RECONCILER_INTERVAL_SECONDS 等）。
+          # /health は K8s 接続に失敗していても 200 を返す（実装計画 7.2章）ので、
+          # probe は「reconcile ループを回し続けられているか」しか見ていない。
+          # 実際の provisioning 健全性は DB の workspaces.status を見ること。
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+      restartPolicy: Always

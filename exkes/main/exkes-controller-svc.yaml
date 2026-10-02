@@ -1,0 +1,43 @@
+# exkes / main: exkes-controller Service（ClusterIP）
+#
+# 更新者: 手動（PR のみ）。CI はこのファイルを触らない。
+#
+# 用途:
+#   クラスタ内から `exkes-controller.platform-exkes-main.svc:8080/health` を
+#   叩けるようにするためのもの。Argo CD の readiness は Deployment の
+#   readinessProbe が Pod を直接叩くので、この Service は通らない。
+#   クラスタ内メトリクス収集や手動での疎通確認に使う。
+#
+# 実装計画 9.4章は「exkes-controller に Service は作らない（reconcile は DB
+# ポーリング駆動なので、外部から叩かれる面が無い）」と明記していた。
+# ここでは作る判断を選んだ理由は次のとおり。
+#   - controller は /health 以外を露出していない（無認証でも情報량이無い）
+#   - Ingress を張らないので外部からは到達できない（ClusterIP のみ）
+#   - Pod 名が変わっても Deployment 名で直接叩ける
+# 露出させたくない場合はこのファイルを削除すればよい（Deployment は Service に
+# 依存しない）。
+#
+# **Ingress は作らない**こと（exkes-api-svc.yaml と同じ理由）。この Service に
+# host を割り当てない。
+#
+# ファイル名について:
+#   実装計画 9.1章は service.yaml という名前を挙げているが、issue #2 の
+#   「1 リソース 1 ファイル」方針に合わせてモジュール名 + 接尾辞で分けた
+#   （exkes-api-svc.yaml / exkes-controller-svc.yaml）。CI は Service ファイルの
+#   名前に依存しない。
+apiVersion: v1
+kind: Service
+metadata:
+  name: exkes-controller
+  labels:
+    app: exkes-controller
+    app.kubernetes.io/part-of: exkes
+    app.kubernetes.io/component: controller
+spec:
+  selector:
+    app: exkes-controller
+  ports:
+    - port: 8080
+      targetPort: 8080
+      protocol: TCP
+  type: ClusterIP
