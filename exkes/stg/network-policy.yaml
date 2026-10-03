@@ -1,0 +1,61 @@
+# exkes / stg: Sandbox namespace の NetworkPolicy（ingress / egress 既定 deny）
+#
+# 更新者: 手動（PR のみ）。CI はこのファイルを触らない。
+#
+# 対象 namespace:
+#   **platform-exkes-stg-sandbox**（= exkes/stg/sandbox-ns.yaml で作る）。
+#   このリソース自身は宛先 namespace（platform-exkes-stg）に置かない。Argo CD は
+#   リソースの metadata.namespace を優先するので、ここには明示を書く
+#   （platform-exkes-stg-sandbox は AppProject `platform` の
+#   destinations `platform-*` に一致する）。
+#
+# 【Control Plane namespace の NetworkPolicy は作らない】理由:
+#   platform-exkes-stg には exkes-api / exkes-controller / mariadb-operator が
+#   揃っている。ここで ingress/egress の deny を入れると、
+#   - controller → K8s API (kubernetes.default.svc) への egress
+#   - exkes-api / exkes-controller → mariadb-exkes-stg:3306 への egress
+#   - DNS への egress
+#   を allow リストに漏れさせて、「DB に接続できない」「名前解決ができない」
+#   という、原因の特定に時間のかかる障害を作りやすい。
+#   platform リポジトリには NetworkPolicy の既存実例が無く（実装計画 9.7章）、
+#   許可リストを裏取りできない状態で deny を入れるのは事故が起きる方策。
+#   よって第1MS の deny は Sandbox namespace のみに限定する。
+#
+# 第1マイルストーンでの実効:
+#   Sandbox namespace に Pod は 1 つも無い（Runtime は第2MS）。したがって
+#   現時点で通信は 0 件、この Policy は「Runtime Pod が入った瞬間から既定で
+#   deny される」状態を先に作るだけ。allow ルールは第2MS で積み上げる。
+#   （NetworkPolicy の導入判断は実装計画 7.3章。issue #2 のタスク項目）
+#
+# podSelector について（設計上の合意点）:
+#   第2MS の Runtime Pod は必ず `exkes.runtime: "true"` ラベルを持つ契約にする。
+#   今後 egress/ingress の許可は**そのラベルで select して**書く。
+#   ここは deny なので `podSelector: {}`（= namespace 内の全 Pod）にしてある。
+#   ラベル必須の Pod だけを select すると、ラベルを付け忘れた Pod が
+#   「default-deny の穴」として素通りし、default-deny という名前が嘘になる。
+#   fail-closed を優先した。
+#
+# allow を足すときの注意（platform に実例が無いので备忘）:
+#   第2MS で最低限これだけを許す。忘れると Sandbox から名前解決すらできない:
+#     - egress to kube-system: 53/UDP, 53/TCP (DNS)
+#     - egress to default/kubernetes: 443（Runtime が Kubernetes API を
+#       呼ぶ要件が出た場合）
+#     - egress to mariadb / in-cluster service の 3306（Runtime が DB に
+#       直接繋ぐ設計になった場合）
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: platform-exkes-stg-sandbox
+  labels:
+    app.kubernetes.io/part-of: exkes
+    app.kubernetes.io/instance: exkes-stg
+spec:
+  # namespace 内の全 Pod が対象（Runtime Pod は exkes.runtime: "true" を持つ）。
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  # ingress / egress の rules を書かない = 許可 0 件 = 全 deny。
+  # 許可は第2MS から上記の構成どおり egress に積み上げる。
+  # ingress 側は Workspace Service からの接続が必要になった時点で開ける。

@@ -1,0 +1,40 @@
+# Control Plane namespace: exkes / main（issue #2「Namespace: prod: platform-exkes-main」）
+#
+# 更新者: 手動（PR のみ）。CI はこのファイルを触らない。
+#
+# 配置するもの:
+#   - exkes-api Deployment / Service
+#   - exkes-controller Deployment / Service
+#   - exkes-controller の ServiceAccount / Role / RoleBinding
+#   - mariadb-operator の MariaDB / Database / User / Grant と BitwardenSecret
+#
+# 配置しないもの:
+#   - Sandbox Runtime（platform-exkes-main-sandbox 側）
+#
+# Pod Security Admission ラベルを**付けない**理由:
+#   この namespace には mariadb-operator が生成する Pod が同居する。restricted を
+#   enforce すると、MariaDB Operator が setuid / chown を使う初期化と
+#   `runAsNonRoot` / `seccompProfile` 指定の不足で Pod が即座に admission 拒否される。
+#   クラスタに既存の適用例が無く（実装計画 9.7章）、検証 없이入れると
+#   「MariaDB が CrashLoop して原因が分からない」状態を作りやすい。
+#   よって PSA は Sandbox namespace（Pod が 1 つも無い）のみに限定して入れる。
+#
+# 前提条件:
+#   - harbor-registry（imagePullSecrets 用の pull secret）がこの namespace に
+#     存在すること。kigawa-net-k8s 側の harbor-sync が TARGET_NAMESPACES に
+#     platform-exkes-main を含めている必要がある（実装計画 11.3章）。
+#   - bitwarden-sec（Bitwarden Secrets Manager の認証トークンを入れる Secret）が
+#     この namespace に存在すること。kigawa-net-k8s 側の
+#     kigawa-system/secret-provider/bitwarden-sync-crn.yaml の TARGET_NAMESPACES
+#     に追記が必要（同上・実装計画 12章#3）。
+#   - どちらの Secret も Argo CD の tracking target ではない（Git に無い）ので、
+#     この namespace の作成より先に secret-provider 側の PR を main に入れておく。
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: platform-exkes-main
+  labels:
+    # どのアプリのものか人間と kubectl/Argo CD を見分けるためのラベル。
+    # Argo CD の sync 判定には影響しない。
+    app.kubernetes.io/part-of: exkes
+    app.kubernetes.io/instance: exkes-main

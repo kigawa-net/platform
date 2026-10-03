@@ -1,0 +1,85 @@
+# exkes / main: Controller RBAC（ServiceAccount / Role / RoleBinding）
+#
+# 更新者: 手動（PR のみ）。CI はこのファイルを触らない。
+#
+# 3 リソースを 1 ファイルにまとめているのは、この 3 つが 1 セット（束ねないと
+# 意味を為さない）で、lipl/stg/mariadb.yaml が 5 リソースを 1 ファイルに
+# めているのと同じ流儀。issue #2 の「1 リソース 1 ファイル」は
+# Deployment と Service を混ぜないための制約（CI の kind ガードが目的）。
+#
+# 【重要】Kubernetes 権限を持つのは exkes-controller の SA **だけ**。
+#   - exkes-api: ServiceAccount を作らない。Deployment も serviceAccountName を
+#     指定せず（= default SA）、automountServiceAccountToken: false で
+#     トークンを作らない。かつ exkes-api は client-java 非依存
+#     （実装計画 11.1章）なので K8s API を呼ぶコードパスがそもそも無い。
+#   - Runtime Pod（第2MS）: SA は controller が動的に作り、トークンも
+#     マウントしない（issue #2）。
+#   - exkes-terminal-gateway / runtime-agent: issue #2「対象外」。
+#
+# namespace について:
+#   宛先 namespace（platform-exkes-main）にそのまま適用する。namespace を明示
+#   しない（apps/exkes-main-app.yml の destination.namespace が適用する）。
+#
+# cross-namespace は**意図的にやっていない**（実装計画 9.5章 / 12章#12）:
+#   Sandbox namespace（platform-exkes-main-sandbox）を跨ぐ RoleBinding は
+#   subjects[].namespace の指定が必要で、Argo CD の宛先 namespace と
+#   食い違いやすい。第2MS の Runtime 実装の時点で Sandbox 側に Role を足す。
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: exkes-controller
+  labels:
+    app: exkes-controller
+    app.kubernetes.io/part-of: exkes
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  # Role 名を SA 名と揃えず「何を許すか」を名前にする。将来 Sandbox 側に
+  # 同じ用途の Role を足したとき衝突しない。
+  name: exkes-controller-workspace-pvc
+  labels:
+    app: exkes-controller
+    app.kubernetes.io/part-of: exkes
+# Role は namespace 単位。platform-exkes-main 内のリソースにしか効かない。
+rules:
+  # 第1MS で controller が**実際に使うのはこれだけ**。
+  # KubernetesWorkspaceProvisioner が触るのは
+  #   readNamespacedPersistentVolumeClaim   = get
+  #   createNamespacedPersistentVolumeClaim = create
+  #   deleteNamespacedPersistentVolumeClaim = delete
+  # の 3 操作。list / watch は現時点のコードからは使っていないが、将来
+  # reconciler を watch ベースにしても Role を触らずに済むよう、read 系を
+  # まとめて付与しておく（それでも PVC に限定している）。
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+  # issue #2「必要権限候補」にある pods / secrets / services / networkpolicies は
+  # **ここでは与えない**。理由:
+  #   - 実際に使うのは第2MS の Sandbox Runtime Pod 作成時。今与えると、
+  #     誰も使わないのに広い SA がクラスタ内に残るだけになる。
+  #   - secrets の write 権限は、Managed Secret を後から増やさなくなった
+  #     場合に漏えいに直結する。必要になるまで絶対に付けない。
+  # 第2MS で必要になったら、このファイルに rule を追記する（手動 PR）。
+  #
+  # apiextensions / CRD / cluster-scoped リソースの権限は不要。
+  # exkes は CRD を作らない（issue #2）。
+  #
+  # events（PVC のProvisioning 進捗）は現状 API から見ない。必要になったら
+  # events の read だけ足す。
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: exkes-controller-workspace-pvc
+  labels:
+    app: exkes-controller
+    app.kubernetes.io/part-of: exkes
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: exkes-controller-workspace-pvc
+subjects:
+  # namespace を省略する = この RoleBinding と同じ namespace（platform-exkes-main）。
+  - kind: ServiceAccount
+    name: exkes-controller

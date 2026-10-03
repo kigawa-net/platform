@@ -1,0 +1,34 @@
+# exkes / stg: exkes-api Service（ClusterIP）
+#
+# 更新者: 手動（PR のみ）。CI はこのファイルを触らない。
+#   （deploy-stg.yml / deploy-prod.yml の MODULES に Service は含まれず、
+#    「意図しないファイル混入チェック」で混入も弾かれる）
+#
+# ファイル名について:
+#   実装計画 9.1章は service.yaml という名前を挙げているが、issue #2 の
+#   「1 リソース 1 ファイル」方針に合わせてモジュール名 + 接尾辞 付きで
+#   分けた（exkes-api-svc.yaml / exkes-controller-svc.yaml）。
+#   CI はファイル名に依存しないのでどちらでも問題ない。
+#
+# type が ClusterIP である理由:
+#   第1マイルストーンの exkes API は**認証が無い**（issue #2 / 実装計画
+#   12章#10）。Ingress を張るとクラスタ外から無認証で
+#   Workspace を作成・削除できてしまう。よって公開せず ClusterIP に留める。
+#   公開するのは Keycloak OIDC 認証を入れた後（実装計画 9.7章 / 12章#9）。
+#   公開时要: stg-exkes.kigawa.net（prod は exkes.kigawa.net。DNS 未確認）。
+apiVersion: v1
+kind: Service
+metadata:
+  name: exkes-api
+  labels:
+    app: exkes-api
+    app.kubernetes.io/part-of: exkes
+    app.kubernetes.io/component: api
+spec:
+  selector:
+    app: exkes-api
+  ports:
+    - port: 8080
+      targetPort: 8080
+      protocol: TCP
+  type: ClusterIP

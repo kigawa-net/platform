@@ -1,0 +1,43 @@
+# Argo CD Application: exkes / stg（issue #2「Argo CD Application: platform-exkes-stg-app」）
+#
+# 更新者: 手動（PR のみ）
+#   - このファイルは exkes 本体の CI から更新されない。構造変更は手動 PR。
+#   - 配下の exkes/stg/*.yaml のうち CI が触るのは exkes-api.yaml /
+#     exkes-controller.yaml の image タグだけ
+#     （kigawa-net/exkes .github/workflows/deploy-stg.yml）。
+#
+# 前提条件:
+#   - apps/apps-app.yml が apps/ を再帰同期するため、Argo CD への手動登録は不要。
+#   - AppProject `platform` の destinations は `platform-*`、sourceRepos は
+#     https://github.com/kigawa-net/* なので exkes はそのまま許可される。
+#   - exkes/stg/*.yaml は本 PR で先に main に入っていなければならない。
+#     入っていない状態で exkes の main をマージすると deploy-stg.yml が
+#     ::error:: を出して該当モジュールの更新をスキップする（実装計画 12章#4）。
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: platform-exkes-stg-app
+  namespace: argocd
+spec:
+  project: platform
+
+  source:
+    repoURL: https://github.com/kigawa-net/platform.git
+    targetRevision: main
+    path: exkes/stg
+    directory:
+      # kustomization.yaml は使わない。フラットに並べた全ファイルを適用する
+      # （lipl と同じ形。実装計画 9.1章）。
+      recurse: true
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: platform-exkes-stg
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: false
+    syncOptions:
+      - CreateNamespace=true
+      - ApplyOutOfSyncOnly=true

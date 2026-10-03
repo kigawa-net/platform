@@ -1,0 +1,42 @@
+# Argo CD Application: exkes / prod（issue #2「Argo CD Application: platform-exkes-main-app」）
+#
+# 更新者: 手動（PR のみ）
+#   - このファイルは exkes 本体の CI から更新されない。
+#   - 配下の exkes/main/*.yaml のうち CI が触るのは exkes-api.yaml /
+#     exkes-controller.yaml の image タグだけ
+#     （kigawa-net/exkes .github/workflows/deploy-prod.yml）。
+#     prod の image は stg から「転記」されるだけで、ここでは build しない
+#     （issue #2「prod では再ビルドせず、stg で利用中の同一イメージをそのまま
+#      promote する」）。
+#
+# 前提条件:
+#   - apps/apps-app.yml が apps/ を再帰同期するため、Argo CD への手動登録は不要。
+#   - AppProject `platform` の destinations は `platform-*` なので
+#     platform-exkes-main / platform-exkes-main-sandbox は許可される。
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: platform-exkes-main-app
+  namespace: argocd
+spec:
+  project: platform
+
+  source:
+    repoURL: https://github.com/kigawa-net/platform.git
+    targetRevision: main
+    path: exkes/main
+    directory:
+      # kustomization.yaml は使わない（stg と同じ）。
+      recurse: true
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: platform-exkes-main
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: false
+    syncOptions:
+      - CreateNamespace=true
+      - ApplyOutOfSyncOnly=true

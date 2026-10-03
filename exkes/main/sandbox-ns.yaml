@@ -1,0 +1,56 @@
+# Sandbox namespace: exkes / main（issue #2「Sandbox Namespace: platform-exkes-main-sandbox」）
+#
+# 更新者: 手動（PR のみ）。CI はこのファイルを触らない。
+#
+# 役割:
+#   Control Plane（platform-exkes-main）と Sandbox Runtime を namespace で分離する
+#   （issue #2「Control Plane と Runtime を分離する」）。第1マイルストーンでは
+#   この namespace に Pod は 1 つも無い（Runtime は exkes-terminal-gateway /
+#   runtime-agent とともに第2マイルストーン以降）。
+#   したがって Sandbox 用 Argo CD Application は作らない。
+#   このファイルは apps/exkes-main-app.yml の directory.recurse で適用される
+#   （Argo CD は宛先 namespace 以外のリソースも apply できる。実装計画 9.2章）。
+#
+# Pod Security Admission を **restricted で enforce する**理由:
+#   issue #2「Runtime Pod」のセキュリティ前提は
+#     - 非 root（Dockerfile は `USER exkes`）
+#     - readOnlyRootFilesystem
+#     - drop ALL capabilities / allowPrivilegeEscalation: false
+#     - seccompProfile: RuntimeDefault
+#     - automountServiceAccountToken: false
+#   という形で、PSA `restricted` が要求する条件とほぼ一致する。
+#   ここで先に enforce しておくことで、第2MS の Runtime Pod が
+#   「まだ制限の緩い namespace に、素の設定で投入される」ことを防ぐ。
+#   今のところ Pod が無いので**既存リソースを弾くリスクはゼロ**で、
+#   NetworkPolicy（exkes/main/network-policy.yaml）と同じく
+#   「入れる前に守りを先に作る」方向の事前設定に過ぎない。
+#
+#   付与しないもの:
+#     - ResourceQuota / LimitRange: リソース上限は Runtime Pod の
+#       requests/limits を実装する第2MS と同時に決める（第1MS では上限値に
+#       根拠が無い。実装計画 9.7章）。
+#     - RuntimeClass: 第2MS。
+#   enforce-version は latest にして、Kubernetes が将来バージョンに上がった
+#   ときの挙動差を無くす。
+#   意図的に revert したい場合は v1.31 等へ pin する。
+#
+# 前提条件:
+#   - なし（Namespace リソースのみ）。bitwarden-sec / harbor-registry は
+#     この namespace に**不要**（第1MS では Runtime Pod が 1 つも無い）。
+#     第2MS で Runtime が image pull 以外の管理リソースを参照するようになった
+#     時点で、kigawa-net-k8s 側の secret-provider へ target を追加する。
+#     実装計画 11.3章は sandbox も事前整備リストに含めている（先行して
+#     入れても害はない）。
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: platform-exkes-main-sandbox
+  labels:
+    app.kubernetes.io/part-of: exkes
+    app.kubernetes.io/instance: exkes-main
+    # issue #2「Runtime Pod」のセキュリティ前提を namespace レベルで強制する。
+    # enforce は第1MS では何もしない（Pod が無い）。後から緩められる脆さは無い。
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
