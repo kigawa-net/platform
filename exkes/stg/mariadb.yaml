@@ -10,11 +10,14 @@
 # namespace は書かない（apps/exkes-stg-app.yml の destination.namespace が適用）。
 #
 # 前提条件（これらが揃わないと MariaDB が起動しない）:
-#   1. **bwSecretId の実 UUID 置換**（最重要）
-#      下の <TODO-BWS-UUID-...> は**プレースホルダ**。Bitwarden に
-#      mariadb-exkes-stg の root-pass / pass を登録し、得た UUID を
-#      ここに書く PR を main に入れること（実装計画 12章#2）。
-#      プレースホルダのまま Argo CD を同期すると BitwardenSecret が
+#   1. **bwSecretId は Bitwarden Secrets Manager に登録済みの実 UUID**（済）
+#      root-pass / pass は project `infra` に登録済み（実装計画 12章#2）。
+#        root-pass: 7c5b8b72-8377-4e6e-a827-b4d80093527a
+#        pass:     7352215e-06bb-4b6b-9649-b4d80093531e
+#      値をローテーションしたときはここも併せて更新すること。
+#      BitwardenSecret は organizationId + UUID で参照するため secret の
+#      **値**はここに書かない（Argo CD の Git に平文を置かない）。
+#      UUID が実体のまま Argo CD を同期できないと BitwardenSecret が
 #      同期失敗し、Secret mariadb-exkes-stg が作られない。exkes-api /
 #      exkes-controller は secretKeyRef を解決できず SecretNotFound で
 #      CrashLoop する。
@@ -52,11 +55,9 @@ spec:
     secretName: bitwarden-sec
     secretKey: token
   map:
-    # ⚠ プレースホルダ。デプロイ前に実 UUID へ置換すること（上記 前提条件 1）。
-    - bwSecretId: "<TODO-BWS-UUID-root-pass>"
+    - bwSecretId: "7c5b8b72-8377-4e6e-a827-b4d80093527a"
       secretKeyName: root-pass
-    # ⚠ プレースホルダ。デプロイ前に実 UUID へ置換すること（上記 前提条件 1）。
-    - bwSecretId: "<TODO-BWS-UUID-pass>"
+    - bwSecretId: "7352215e-06bb-4b6b-9649-b4d80093531e"
       secretKeyName: pass
 ---
 # ② MariaDB 本体（環境ごと専用。共有インスタンスは使わない）
