@@ -65,7 +65,7 @@ spec:
           # ↓ CI（deploy-stg.yml / deploy-prod.yml）が yq で書き換える。
           # 初期値はプレースホルダ（全 0 の 40 hex）。最初の main push で実 SHA に
           # 置き換わる。stg の exkes-api とは**別モジュール**なので SHA も別になる。
-          image: harbor.kigawa.net/private/exkes-controller:main-0000000000000000000000000000000000000000
+          image: harbor.kigawa.net/private/exkes-controller:main-2de510d015377ea5f89a3f589b6202acbb7a379b
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
