@@ -67,7 +67,7 @@ spec:
           # 初期値はプレースホルダ（全 0 の 40 hex）。harbor には存在しないので、
           # ImagePullBackOff になるのが正しい状態。最初の main push で
           # 実 SHA に置き換わる。
-          image: harbor.kigawa.net/private/exkes-api:main-98d1f5721635461463ce6c24db3c7a9310abbfdb
+          image: harbor.kigawa.net/private/exkes-api:main-91c91cd55d3d9820ea5ef195411de45815d0ee51
           # 本番相当なので tag 固定 = Always は使わない（platform/CLAUDE.md の規約）。
           # 昇格時は stg と同一 tag / 同一 digest になる。
           imagePullPolicy: IfNotPresent
