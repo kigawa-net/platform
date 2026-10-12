@@ -1,0 +1,38 @@
+# exkes / stg: Sandbox resource management (exkes #32; platform #17).
+# This file is deliberately NOT a replacement of stg/rbac.yaml yet.
+# Retain legacy control-namespace PVC permissions until existing Workspace
+# PVCs have been inventoried and sandbox migration has been verified.
+# Only exkes-controller in the CONTROL namespace receives sandbox permissions.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: exkes-controller-sandbox-resources
+  namespace: platform-exkes-stg-sandbox
+  labels:
+    app.kubernetes.io/part-of: exkes
+rules:
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: exkes-controller-sandbox-resources
+  namespace: platform-exkes-stg-sandbox
+  labels:
+    app.kubernetes.io/part-of: exkes
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: exkes-controller-sandbox-resources
+subjects:
+  - kind: ServiceAccount
+    name: exkes-controller
+    namespace: platform-exkes-stg
