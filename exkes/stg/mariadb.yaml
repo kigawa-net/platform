@@ -114,7 +114,11 @@ spec:
   passwordSecretKeyRef:
     name: mariadb-exkes-stg
     key: pass
-  maxUserConnections: 20
+  # exkes-api / exkes-controller / exkes-terminal-gateway はそれぞれ Hikari 既定
+  # （最大 10 接続を起動時に確保）。ローリング更新では新旧 Pod が同時に繋ぐため
+  # 3 サービス × 10 × 2 = 60 を見込む。20 のままだと更新中の新 Pod が接続を確保
+  # できず（max_user_connections 超過）、更新が進まなくなる。
+  maxUserConnections: 60
 ---
 # ⑤ Grant（④の User に ③の Database への ALL PRIVILEGES を与える）
 apiVersion: k8s.mariadb.com/v1alpha1
