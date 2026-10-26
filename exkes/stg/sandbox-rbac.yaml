@@ -1,0 +1,74 @@
+# exkes / stg: Sandbox namespace 向けの controller 権限（Role / RoleBinding）
+#
+# 更新者: 手動（PR のみ）。CI はこのファイルを触らない。
+#
+# 対象 namespace: **platform-exkes-stg-sandbox**（= exkes/stg/sandbox-ns.yaml で作る）。
+#   Role / RoleBinding は metadata.namespace を明示する。Argo CD の宛先は
+#   platform-exkes-stg だが、リソースの metadata.namespace が優先される
+#   （network-policy.yaml と同じ扱い）。
+#
+# 対象の SA: platform-exkes-stg の exkes-controller（exkes/stg/rbac.yaml で作る）。
+#   subjects[].namespace を明示して cross-namespace で束ねる。
+#
+# 付与する権限は「exkes-controller のコードが実際に呼ぶ操作」だけ（根拠は各 rule のコメント）。
+# controller が sandbox namespace を使うのは、環境変数
+#   EXKES_KUBERNETES_RESOURCE_NAMESPACE=platform-exkes-stg-sandbox
+# を controller に与えたときだけ（現状の exkes/stg/exkes-controller.yaml は未設定で、
+# EXKES_KUBERNETES_NAMESPACE（legacy）により PVC / Pod を platform-exkes-stg に置く）。
+# この Role は先に入れておいても害は無い（呼ばれない権限が付くだけ）。
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: exkes-controller-sandbox
+  namespace: platform-exkes-stg-sandbox
+  labels:
+    app: exkes-controller
+    app.kubernetes.io/part-of: exkes
+# Role は namespace 単位。platform-exkes-stg-sandbox 内のリソースにしか効かない。
+rules:
+  # Runtime Pod（KubernetesRuntimeProvider）:
+  #   createRuntime                -> createNamespacedPod
+  #   stopRuntime                  -> deleteNamespacedPod
+  #   readPod（存在確認）          -> readNamespacedPod
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "create", "delete"]
+  # Runtime の ClusterIP Service（RuntimeService.kt の CoreV1RuntimeServiceStore）:
+  #   ensure -> readNamespacedService / createNamespacedService
+  #   delete -> deleteNamespacedService
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["get", "create", "delete"]
+  # Workspace PVC（KubernetesWorkspaceProvisioner / KubernetesRuntimeProvider）:
+  #   readNamespacedPersistentVolumeClaim   -> get
+  #   createNamespacedPersistentVolumeClaim -> create
+  #   deleteNamespacedPersistentVolumeClaim -> delete
+  # 操作は get / create / delete の 3 つだけに絞る（list / watch は現行コードで呼んでいない）。
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["get", "create", "delete"]
+  #
+  # 付与しないもの:
+  #   - pods/log: KubernetesRuntimeProvider.streamRuntimeLogs は RuntimeProvisioner の
+  #     インターフェースにあるが、本番コードからの呼び出し元は無い（テストのみ）。
+  #     呼び出しを足す PR で rule を追記する。
+  #   - list / watch / update / patch: 現行コードは呼んでいない。
+  #   - secrets / events / networkpolicies: 使わない（rbac.yaml と同じ方針）。
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: exkes-controller-sandbox
+  namespace: platform-exkes-stg-sandbox
+  labels:
+    app: exkes-controller
+    app.kubernetes.io/part-of: exkes
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: exkes-controller-sandbox
+subjects:
+  # SA は control namespace（platform-exkes-stg）側にある。cross-namespace のため namespace を明示する。
+  - kind: ServiceAccount
+    name: exkes-controller
+    namespace: platform-exkes-stg

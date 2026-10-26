@@ -23,7 +23,8 @@
 # cross-namespace は**意図的にやっていない**（実装計画 9.5章 / 12章#12）:
 #   Sandbox namespace（platform-exkes-main-sandbox）を跨ぐ RoleBinding は
 #   subjects[].namespace の指定が必要で、Argo CD の宛先 namespace と
-#   食い違いやすい。第2MS の Runtime 実装の時点で Sandbox 側に Role を足す。
+#   食い違いやすい。Sandbox 側の Role / RoleBinding は sandbox-rbac.yaml に置く
+#   （subjects[].namespace を明示して、この SA を指す）。
 apiVersion: v1
 kind: ServiceAccount
 metadata:
