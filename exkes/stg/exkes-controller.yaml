@@ -82,14 +82,23 @@ spec:
                 secretKeyRef:
                   name: mariadb-exkes-stg
                   key: pass
-            # exkes.kubernetes section。controller が PVC を作る namespace。
-            # 第1MS では Sandbox Namespace を跨いだ操作を行わない
-            # （Runtime Pod を Sandbox に置くのは第2MS。実装計画 9.4章）。
-            # ここでは「自分がいる namespace」= platform-exkes-stg をそのまま使う。
+            # exkes.kubernetes section。Control Plane（自分がいる namespace）と、
+            # Workspace PVC / Runtime Pod / Runtime Service を置く Sandbox namespace を分ける
+            # （実装計画 9.4章）。CONTROL と RESOURCE は必ずセットで設定する
+            # （片方だけだと controller が起動に失敗する）。
+            # 切り替え前に platform-exkes-stg へ作られた workspace は pvcNamespace が
+            # 食い違い reconcile できないため、切り替え時に再作成する（stg は検証環境）。
+            # Sandbox 側の権限は sandbox-rbac.yaml（Role exkes-controller-sandbox）。
             - name: EXKES_KUBERNETES_NAMESPACE
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
+            - name: EXKES_KUBERNETES_CONTROL_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: EXKES_KUBERNETES_RESOURCE_NAMESPACE
+              value: platform-exkes-stg-sandbox
             - name: EXKES_KUBERNETES_USE_IN_CLUSTER
               value: "true"
             # exkes.workspace section。PVC は controller が実行時に動的作成する
