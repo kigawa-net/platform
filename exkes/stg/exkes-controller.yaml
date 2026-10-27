@@ -99,6 +99,13 @@ spec:
                   fieldPath: metadata.namespace
             - name: EXKES_KUBERNETES_RESOURCE_NAMESPACE
               value: platform-exkes-stg-sandbox
+            # exkes.runtime section。Runtime Pod の sidecar（runtime-agent）の image。
+            # exkes-controller の image と違い CI（deploy-stg.yml）は更新しない
+            # （containers[0].image だけを書き換えるため）。runtime-agent を更新したら
+            # このタグを手動 PR で上げる。harbor-registry は sandbox namespace に
+            # harbor-sync-crn が同期している（imagePullSecret 既定値と同じ名前）。
+            - name: EXKES_RUNTIME_AGENT_IMAGE
+              value: harbor.kigawa.net/private/exkes-runtime-agent:main-309d99f398bb6b48d6f7dced01c4b0308c8a45b5
             - name: EXKES_KUBERNETES_USE_IN_CLUSTER
               value: "true"
             # exkes.workspace section。PVC は controller が実行時に動的作成する
