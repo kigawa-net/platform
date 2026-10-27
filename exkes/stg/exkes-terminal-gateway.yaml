@@ -65,7 +65,7 @@ spec:
         - name: exkes-terminal-gateway
           # ↓ 有効化まではプレースホルダ（全 0 の 40 hex）。replicas: 0 の間は Pod を作らないので
           # 存在しない image でも害は無い。有効化時に実 SHA へ置き換える。
-          image: harbor.kigawa.net/private/exkes-terminal-gateway:main-0000000000000000000000000000000000000000
+          image: harbor.kigawa.net/private/exkes-terminal-gateway:main-1739aa09a9f105986959ade03e61ec1ae64957d5
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
