@@ -1,0 +1,118 @@
+# exkes / stg: exkes-terminal-gateway Deployment
+#
+# 更新者:
+#   - image タグ: **現時点では CI の対象外**。kigawa-net/exkes の deploy-stg.yml は
+#     MODULES = "exkes-api exkes-controller" の 2 つだけを build / 更新する。
+#     exkes-terminal-gateway を加えるまで、このファイルの image は手動で
+#     更新しない（有効化手順は exkes 側の CI 変更とセットで、この PR の説明を参照）。
+#   - それ以外（env / probe / resources / replicas 等）: **手動 PR**。
+#
+# 【replicas: 0 で置いている理由】
+#   ArgoCD（apps/exkes-stg-app.yml, selfHeal: false / automated prune）はこの PR が
+#   main に入った時点で自動同期する。まだ harbor に存在しない image を指す
+#   replicas: 1 の Deployment を入れると、Pod は ImagePullBackOff になり続ける。
+#   それを避けるため replicas: 0 で入れる（Deployment オブジェクトだけ作られ、
+#   Pod は 1 つも起動しない）。
+#   有効化の PR で「image を実在する main-<sha> に置換」と「replicas: 1」を同時に
+#   行う。CI 側の build / 更新対象への追加が先に済んでいること。
+#
+# CI との前提（将来 CI の対象に加えるとき壊さないこと）:
+#   1. このファイルは **Deployment 1 リソースだけ**であること。
+#      Service は exkes-terminal-gateway-svc.yaml へ分離する。
+#   2. `containers[0]` が exkes-terminal-gateway であること。
+#   3. image は `harbor.kigawa.net/private/exkes-terminal-gateway:main-<40 hex>` 形式。
+#
+# 権限（issue #2「Controller RBAC」の方針を踏襲）:
+#   - K8s API を呼ばない（docs/terminal-gateway.md）。ServiceAccount を作らず、
+#     serviceAccountName を指定しない（= namespace の default SA）。
+#     automountServiceAccountToken: false でトークンもマウントしない。
+#   - Secret は DB パスワードだけ（mariadb-exkes-stg / key: pass）。
+#
+# 前提条件:
+#   - harbor-registry（imagePullSecrets）が ns 内に存在すること（exkes-api と同じ）。
+#   - mariadb-exkes-stg Secret が BitwardenSecret 経由で同期済みであること。
+#   - スキーマは exkes-api / exkes-controller が migrate 済みであること
+#     （gateway は migrate しない）。
+#
+# namespace は書かない（apps/exkes-stg-app.yml の destination.namespace が適用する）。
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: exkes-terminal-gateway
+  labels:
+    app: exkes-terminal-gateway
+    app.kubernetes.io/part-of: exkes
+    app.kubernetes.io/component: terminal-gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: exkes-terminal-gateway
+  template:
+    metadata:
+      name: exkes-terminal-gateway
+      labels:
+        app: exkes-terminal-gateway
+        app.kubernetes.io/part-of: exkes
+        app.kubernetes.io/component: terminal-gateway
+    spec:
+      automountServiceAccountToken: false
+      imagePullSecrets:
+        - name: harbor-registry
+      containers:
+        - name: exkes-terminal-gateway
+          image: harbor.kigawa.net/private/exkes-terminal-gateway:main-1739aa09a9f105986959ade03e61ec1ae64957d5
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+          env:
+            # 値は exkes-terminal-gateway/src/main/resources/application.conf の
+            # exkes.database section と 1対1。
+            - name: EXKES_DATABASE_JDBC_URL
+              value: jdbc:mariadb://mariadb-exkes-stg:3306/exkes
+            - name: EXKES_DATABASE_USER
+              value: exkes
+            - name: EXKES_DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mariadb-exkes-stg
+                  key: pass
+            # runtime-agent の到達先。{podName} は runtimes.pod_name（rt-<id>）に置換される。
+            # 名前は controller が作る Service（Pod と同名、sandbox namespace）。
+            # 既定値（application.conf）と同じ namespace。main では -main-sandbox に変える。
+            - name: EXKES_TERMINAL_GATEWAY_AGENT_URL_TEMPLATE
+              value: ws://{podName}.platform-exkes-stg-sandbox.svc.cluster.local:8080/terminal
+          # /health は GET /health（exkes-terminal-gateway Application.kt、200 ok）。
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+      restartPolicy: Always

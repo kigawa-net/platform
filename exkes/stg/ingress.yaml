@@ -1,0 +1,62 @@
+# exkes / stg: Ingress（API + Terminal Gateway）
+#
+# 更新者: 手動（PR のみ）。CI はこのファイルを触らない。
+#
+# ドメイン: exkes-stg.kigawa.net（stg 専用）。
+# TLS は HAProxy Ingress Controller が外部で終端する（クラスタ内の
+# Ingress → Service 間は HTTP）。
+#
+# WebSocket:
+#   /v1/terminal は exkes-terminal-gateway の WebSocket エンドポイント。
+#   HAProxy は WebSocket アップグレード（101 Switching Protocols）を
+#   既定でサポートするが、haproxy.org/ws-codes-to-proxy で明示する。
+#
+# ルーティング:
+#   /v1/terminal → exkes-terminal-gateway:8080（WebSocket）
+#   /v1          → exkes-api:8080（HTTP REST API）
+#   /health      → exkes-api:8080（ヘルスチェック）
+#
+#   /v1/terminal が /v1 より先に定義されているのは、Kubernetes Ingress
+#   が最長一致（longest prefix match）でルーティングするため。
+#   pathType: Prefix なので、/v1/terminal は /v1 より優先される。
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: exkes-stg
+  namespace: platform-exkes-stg
+  labels:
+    app.kubernetes.io/part-of: exkes
+    app.kubernetes.io/component: ingress
+  annotations:
+    haproxy.org/ws-codes-to-proxy: "101"
+spec:
+  ingressClassName: haproxy
+  rules:
+    - host: exkes-stg.kigawa.net
+      http:
+        paths:
+          - path: /v1/terminal
+            pathType: Prefix
+            backend:
+              service:
+                name: exkes-terminal-gateway
+                port:
+                  number: 8080
+          - path: /v1
+            pathType: Prefix
+            backend:
+              service:
+                name: exkes-api
+                port:
+                  number: 8080
+          - path: /health
+            pathType: Exact
+            backend:
+              service:
+                name: exkes-api
+                port:
+                  number: 8080
+  tls:
+    - hosts:
+        - exkes-stg.kigawa.net
+      secretName: kigawa-net-wildcard-tls

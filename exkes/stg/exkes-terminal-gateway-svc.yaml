@@ -1,0 +1,27 @@
+# exkes / stg: exkes-terminal-gateway Service（ClusterIP）
+#
+# 更新者: 手動（PR のみ）。CI はこのファイルを触らない。
+#
+# type が ClusterIP である理由:
+#   Terminal gateway は**認証・認可が未実装**（docs/terminal-gateway.md「未解決事項」）。
+#   token を持つ者は誰でも Runtime に入れる状態なので、外部へ公開しない。
+#   Ingress は作らない。公開は Keycloak OIDC 認証を入れた後の後続作業。
+#   ClusterIP でもクラスタ内の他 Pod からは到達できる。gateway 側の入口を
+#   絞る NetworkPolicy（platform-exkes-stg への ingress 制限）は作っていない。
+#   有効化の PR で必要性を再検討すること。
+apiVersion: v1
+kind: Service
+metadata:
+  name: exkes-terminal-gateway
+  labels:
+    app: exkes-terminal-gateway
+    app.kubernetes.io/part-of: exkes
+    app.kubernetes.io/component: terminal-gateway
+spec:
+  selector:
+    app: exkes-terminal-gateway
+  ports:
+    - port: 8080
+      targetPort: 8080
+      protocol: TCP
+  type: ClusterIP
