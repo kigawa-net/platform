@@ -70,7 +70,7 @@ spec:
           # 転記して yq で書き換える。CI はこの image しか触らない。
           # 初期値はプレースホルダ（全 0 の 40 hex）。最初の昇格で実 SHA に
           # 置き換わる。exkes-api とは**別モジュール**なので SHA も別になる。
-          image: harbor.kigawa.net/private/exkes-controller:main-0000000000000000000000000000000000000000
+          image: harbor.kigawa.net/private/exkes-controller:main-a42418dacd77f51e68fb509e3a53dbf32bdc42a2
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
