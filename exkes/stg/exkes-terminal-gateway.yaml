@@ -44,9 +44,7 @@ metadata:
     app.kubernetes.io/part-of: exkes
     app.kubernetes.io/component: terminal-gateway
 spec:
-  # 有効化まで 0（上記コメント参照）。有効化の PR で 1 にする。
-  # 増やす判断は未定（gateway は状態を持たないが、同時接続上限は未実装）。
-  replicas: 0
+  replicas: 1
   selector:
     matchLabels:
       app: exkes-terminal-gateway
@@ -63,8 +61,6 @@ spec:
         - name: harbor-registry
       containers:
         - name: exkes-terminal-gateway
-          # ↓ 有効化まではプレースホルダ（全 0 の 40 hex）。replicas: 0 の間は Pod を作らないので
-          # 存在しない image でも害は無い。有効化時に実 SHA へ置き換える。
           image: harbor.kigawa.net/private/exkes-terminal-gateway:main-1739aa09a9f105986959ade03e61ec1ae64957d5
           imagePullPolicy: IfNotPresent
           ports:

@@ -1,0 +1,25 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: exkes-api
+  namespace: platform-exkes-stg
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    cert-manager.kubernetes.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+spec:
+  tls:
+    - hosts:
+        - api.kigawa.net
+      secretName: kigawa-tls-secret
+  rules:
+    - host: api.kigawa.net
+      http:
+        paths:
+          - path: /v1
+            pathType: Prefix
+            backend:
+              service:
+                name: exkes-api
+                port:
+                  number: 8080
