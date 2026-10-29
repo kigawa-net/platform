@@ -61,7 +61,7 @@ spec:
         - name: harbor-registry
       containers:
         - name: exkes-terminal-gateway
-          image: harbor.kigawa.net/private/exkes-terminal-gateway:main-196d1cad6fef6566a2246575e52b78435bcb61cc
+          image: harbor.kigawa.net/private/exkes-terminal-gateway:main-6a12adc842323e4e1bd27715905a14e6d3d49ff8
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
