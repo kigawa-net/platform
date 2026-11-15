@@ -114,7 +114,7 @@ spec:
   passwordSecretKeyRef:
     name: mariadb-exkes-main
     key: pass
-  maxUserConnections: 20
+  maxUserConnections: 60
 ---
 # ⑤ Grant（④の User に ③の Database への ALL PRIVILEGES を与える）
 apiVersion: k8s.mariadb.com/v1alpha1
