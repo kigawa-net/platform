@@ -1,0 +1,57 @@
+# exkes / main: Ingress（API + Dashboard）
+#
+# 更新者: 手動（PR のみ）。CI はこのファイルを触らない。
+#
+# ドメイン: exkes.kigawa.net（本番）。
+# TLS は HAProxy Ingress Controller が外部で終端する（クラスタ内の
+# Ingress → Service 間は HTTP）。
+#
+# WebSocket:
+#   HAProxy は WebSocket アップグレード（101 Switching Protocols）を
+#   既定でサポートするが、haproxy.org/ws-codes-to-proxy で明示する。
+#
+# ルーティング:
+#   /dashboard → exkes-api:8080（ダッシュボード静的ファイル）
+#   /          → exkes-api:8080（ダッシュボード index.html）
+#   /health    → exkes-api:8080（ヘルスチェック）
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: exkes-main
+  namespace: platform-exkes-main
+  labels:
+    app.kubernetes.io/part-of: exkes
+    app.kubernetes.io/component: ingress
+  annotations:
+    haproxy.org/ws-codes-to-proxy: "101"
+spec:
+  ingressClassName: haproxy
+  rules:
+    - host: exkes.kigawa.net
+      http:
+        paths:
+          - path: /dashboard
+            pathType: Prefix
+            backend:
+              service:
+                name: exkes-api
+                port:
+                  number: 8080
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: exkes-api
+                port:
+                  number: 8080
+          - path: /health
+            pathType: Exact
+            backend:
+              service:
+                name: exkes-api
+                port:
+                  number: 8080
+  tls:
+    - hosts:
+        - exkes.kigawa.net
+      secretName: kigawa-net-wildcard-tls
